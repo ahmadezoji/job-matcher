@@ -205,3 +205,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Added sensitive files and data to .gitignore
+config.ini
+*.json
+*.env
+*.token
+*.key
+*.pem
+*.p12
+*.log
+*.sqlite3
+*.db
+.vscode/
+__pycache__/
+*.pyc
+.DS_Store
+.envrc
+.idea/

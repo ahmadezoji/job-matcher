@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Matcher Profile</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin-bottom: 4px;
+      }
+      .card {
+        background: #1e293b;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.8);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: bold;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: none;
+        margin-bottom: 18px;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      select[multiple] {
+        min-height: 90px;
+      }
+      button {
+        width: 100%;
+        background: linear-gradient(120deg, #22d3ee, #3b82f6);
+        border: none;
+        color: #0f172a;
+        padding: 14px;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .hint {
+        font-size: 13px;
+        color: #94a3b8;
+        margin-top: -10px;
+        margin-bottom: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Freelancer Profile</h1>
+        <p class="hint">
+          Fill the form and tap Submit. The data will be sent to the Telegram bot securely.
+        </p>
+        <form id="profile-form">
+          <label for="name">Name *</label>
+          <input id="name" name="name" required />
+
+          <label for="surname">Surname *</label>
+          <input id="surname" name="surname" required />
+
+          <label for="email">Email *</label>
+          <input id="email" name="email" type="email" required />
+
+          <label for="platforms">Platforms *</label>
+          <select id="platforms" name="platforms" multiple required>
+            {% for item in options.platforms %}
+            <option value="{{ item }}">{{ item.title() }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="positions">Positions *</label>
+          <select id="positions" name="positions" multiple required>
+            {% for item in options.positions %}
+            <option value="{{ item }}">{{ item.title() }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="skills">Skills (comma separated) *</label>
+          <input id="skills" name="skills" placeholder="React, Node.js, AWS" required />
+
+          <label for="experience">Experience summary *</label>
+          <textarea id="experience" name="experience" rows="4" required></textarea>
+
+          <label for="hourly_rate">Hourly rate</label>
+          <input id="hourly_rate" name="hourly_rate" type="number" min="0" step="1" />
+
+          <label for="fixed_rate_min">Fixed rate min</label>
+          <input id="fixed_rate_min" name="fixed_rate_min" type="number" min="0" />
+
+          <label for="fixed_rate_max">Fixed rate max</label>
+          <input id="fixed_rate_max" name="fixed_rate_max" type="number" min="0" />
+
+          <label for="currency">Preferred currency</label>
+          <select id="currency" name="currency">
+            {% for item in options.currency %}
+            <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="availability">Availability</label>
+          <select id="availability" name="availability" multiple>
+            {% for item in options.availability %}
+            <option value="{{ item }}">{{ item.title() }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="experience_level">Experience level</label>
+          <select id="experience_level" name="experience_level">
+            {% for item in options.experience_level %}
+            <option value="{{ item }}">{{ item.title() }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="location">Location</label>
+          <select id="location" name="location">
+            {% for item in options.location %}
+            <option value="{{ item }}">{{ item.title() }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="languages">Languages</label>
+          <select id="languages" name="languages" multiple>
+            {% for item in options.languages %}
+            <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="sample_link">Sample project link</label>
+          <input id="sample_link" name="sample_link" placeholder="https://yourportfolio.com" />
+
+          <button type="submit">Submit profile</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const tg = window.Telegram.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
+      const form = document.getElementById("profile-form");
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const payload = {
+          name: formData.get("name"),
+          surname: formData.get("surname"),
+          email: formData.get("email"),
+          platforms: getSelected("platforms"),
+          positions: getSelected("positions"),
+          skills: formData.get("skills"),
+          experience: formData.get("experience"),
+          hourly_rate: formData.get("hourly_rate"),
+          fixed_rate_min: formData.get("fixed_rate_min"),
+          fixed_rate_max: formData.get("fixed_rate_max"),
+          currency: formData.get("currency"),
+          availability: getSelected("availability"),
+          experience_level: formData.get("experience_level"),
+          location: formData.get("location"),
+          languages: getSelected("languages"),
+          sample_link: formData.get("sample_link"),
+        };
+        if (tg) {
+          tg.sendData(JSON.stringify(payload));
+          tg.close();
+        } else {
+          alert("Telegram WebApp not detected. Copy this JSON manually:\n" + JSON.stringify(payload, null, 2));
+        }
+      });
+
+      function getSelected(id) {
+        const select = document.getElementById(id);
+        return Array.from(select.selectedOptions).map((opt) => opt.value);
+      }
+    </script>
+  </body>
+</html>
