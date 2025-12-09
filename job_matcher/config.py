@@ -26,7 +26,8 @@ class OpenAISettings:
 
 @dataclass
 class WebAppSettings:
-    base_url: str
+    profile_form_url: str
+    bid_form_url: str
 
 
 @dataclass
@@ -77,8 +78,19 @@ def load_settings(path: Path = CONFIG_PATH) -> Settings:
     if not openai_settings.api_key:
         raise ValueError("OpenAI API key is missing from config.ini")
 
+    profile_form_url = parser.get("webapp", "profile_form_url", fallback=None)
+    legacy_base_url = parser.get("webapp", "base_url", fallback="http://localhost:8000/webapp")
+    if not profile_form_url:
+        profile_form_url = legacy_base_url
+    bid_form_url = parser.get(
+        "webapp",
+        "bid_form_url",
+        fallback=profile_form_url.replace("webapp", "bid-form"),
+    )
+
     webapp = WebAppSettings(
-        base_url=parser.get("webapp", "base_url", fallback="http://localhost:8000/webapp")
+        profile_form_url=profile_form_url,
+        bid_form_url=bid_form_url,
     )
 
     service = ServiceSettings(

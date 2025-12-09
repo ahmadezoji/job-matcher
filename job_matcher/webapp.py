@@ -36,3 +36,14 @@ async def profile_form(request: Request) -> HTMLResponse:
         "profile_form.html",
         {"request": request, "options": options},
     )
+
+
+@app.get("/bid-form", response_class=HTMLResponse)
+async def bid_form(request: Request, job_id: int, title: str, currency: str = "USD") -> HTMLResponse:
+    context = {
+        "request": request,
+        "job_id": job_id,
+        "title": title,
+        "currency": currency,
+    }
+    return templates.TemplateResponse("bid_form.html", context)

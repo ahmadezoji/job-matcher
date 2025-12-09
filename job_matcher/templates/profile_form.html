@@ -166,22 +166,25 @@
         event.preventDefault();
         const formData = new FormData(form);
         const payload = {
-          name: formData.get("name"),
-          surname: formData.get("surname"),
-          email: formData.get("email"),
-          platforms: getSelected("platforms"),
-          positions: getSelected("positions"),
-          skills: formData.get("skills"),
-          experience: formData.get("experience"),
-          hourly_rate: formData.get("hourly_rate"),
-          fixed_rate_min: formData.get("fixed_rate_min"),
-          fixed_rate_max: formData.get("fixed_rate_max"),
-          currency: formData.get("currency"),
-          availability: getSelected("availability"),
-          experience_level: formData.get("experience_level"),
-          location: formData.get("location"),
-          languages: getSelected("languages"),
-          sample_link: formData.get("sample_link"),
+          form_type: "profile",
+          data: {
+            name: formData.get("name"),
+            surname: formData.get("surname"),
+            email: formData.get("email"),
+            platforms: getSelected("platforms"),
+            positions: getSelected("positions"),
+            skills: formData.get("skills"),
+            experience: formData.get("experience"),
+            hourly_rate: formData.get("hourly_rate"),
+            fixed_rate_min: formData.get("fixed_rate_min"),
+            fixed_rate_max: formData.get("fixed_rate_max"),
+            currency: formData.get("currency"),
+            availability: getSelected("availability"),
+            experience_level: formData.get("experience_level"),
+            location: formData.get("location"),
+            languages: getSelected("languages"),
+            sample_link: formData.get("sample_link"),
+          },
         };
         if (tg) {
           tg.sendData(JSON.stringify(payload));

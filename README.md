@@ -46,7 +46,8 @@ api_base=https://www.freelancer.com/api/projects/0.1
 api_key=sk-...
 
 [webapp]
-base_url=https://<public-host>/webapp   # or http://<lan-ip>:8000/webapp for testing
+profile_form_url=https://<public-host>/webapp   # or http://<lan-ip>:8000/webapp for testing
+bid_form_url=https://<public-host>/bid-form    # should share same host, different path
 
 [service]
 fetch_interval_seconds=120
@@ -71,7 +72,7 @@ You need the FastAPI WebApp and the Telegram bot running at the same time.
 uvicorn job_matcher.webapp:app --reload --port 8000
 ```
 
-Expose the chosen URL publicly (e.g., via [ngrok](https://ngrok.com/)) and update `[webapp].base_url` in `config.ini`. Telegram’s WebApp button uses that absolute URL.
+Expose the chosen URLs publicly (e.g., via [ngrok](https://ngrok.com/)) and update `[webapp].profile_form_url` / `[webapp].bid_form_url` in `config.ini`. Telegram’s WebApp buttons use those absolute HTTPS addresses.
 
 ### 3.2 Telegram bot + background matcher
 
@@ -88,8 +89,8 @@ What happens at runtime:
    - hits the Freelancer API via `freelancer_api_helper.search_jobs`,
    - deduplicates using `JobStateStore` and enqueues new leads.
 4. The bot drains the queue every 5 seconds and sends modern job cards (HTML layout) with a `Bid this job` button.
-5. “Bid this job” shows the full description with confirm/cancel buttons.
-6. Confirm triggers OpenAI cover-letter generation, then `create_bid` posts it to Freelancer. The final status is written back into `fetched_jobs_for_users.json` (`bid_confirmed`, `bid_failed`, etc.).
+5. “Bid this job” shows full details with an “Enter bid” WebApp button. The form collects amount, duration, and sample project notes.
+6. The bot generates a cover letter draft, shows it back to the user for approval, and on confirmation calls `create_bid`. Every transition lands in `fetched_jobs_for_users.json` (`bid_draft`, `bid_confirmed`, `bid_failed`, etc.).
 
 All token/ID dependent logic lives in helpers so you can expand to other platforms later.
 

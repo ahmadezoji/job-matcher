@@ -73,3 +73,21 @@ class JobStateStore:
             if note:
                 job["note"] = note
             self._save(data)
+
+    def save_bid_metadata(self, user_id: int, job_id: int, metadata: Dict[str, Any]) -> None:
+        with self._lock:
+            data = self._load()
+            user_data = self._ensure_user(user_id, data)
+            job = user_data["jobs"].setdefault(str(job_id), {})
+            job["bid_metadata"] = metadata
+            job["updated_at"] = _now_iso()
+            self._save(data)
+
+    def get_bid_metadata(self, user_id: int, job_id: int) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            data = self._load()
+            user_data = data.get(str(user_id), {})
+            job = user_data.get("jobs", {}).get(str(job_id))
+            if not job:
+                return None
+            return job.get("bid_metadata")
