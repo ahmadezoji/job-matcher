@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from queue import Empty
 from typing import Optional
+from urllib.parse import urlencode
 
 from telegram import (
     InlineKeyboardButton,
@@ -81,7 +82,7 @@ class JobMatcherBot:
                 [
                     KeyboardButton(
                         text="Create Profile" if not has_profile else "Edit Profile",
-                        web_app=WebAppInfo(url=self.settings.webapp.base_url),
+                        web_app=WebAppInfo(url=self.settings.webapp.profile_form_url),
                     )
                 ]
             ],
@@ -116,9 +117,21 @@ class JobMatcherBot:
         except json.JSONDecodeError:
             await update.effective_message.reply_text("Unable to parse form submission.")
             return
-        payload["telegram_user_id"] = user_id
-        self.profile_store.upsert_profile(user_id, payload)
-        await update.effective_message.reply_text("Profile saved successfully ✅")
+
+        form_type = payload.get("form_type", "profile")
+        form_data = payload.get("data", payload)
+
+        if form_type == "profile":
+            form_data["telegram_user_id"] = user_id
+            self.profile_store.upsert_profile(user_id, form_data)
+            await update.effective_message.reply_text("Profile saved successfully ✅")
+            return
+
+        if form_type == "bid":
+            await self._process_bid_form_submission(update, user_id, form_data)
+            return
+
+        await update.effective_message.reply_text("Unknown form submission received.")
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -138,12 +151,15 @@ class JobMatcherBot:
         if data.startswith("bid:"):
             job_id = int(data.split(":")[1])
             await self._show_job_details(query, job_id)
-        elif data.startswith("confirm:"):
-            job_id = int(data.split(":")[1])
-            await self._confirm_bid(query, job_id)
         elif data.startswith("cancel:"):
             job_id = int(data.split(":")[1])
             await self._cancel_bid(query, job_id)
+        elif data.startswith("sendbid:"):
+            job_id = int(data.split(":")[1])
+            await self._submit_bid(query, job_id)
+        elif data.startswith("cancelbid:"):
+            job_id = int(data.split(":")[1])
+            await self._cancel_bid_draft(query, job_id)
 
     async def _send_profile_summary(self, query) -> None:
         profile = self.profile_store.get_profile(query.from_user.id)
@@ -167,9 +183,12 @@ class JobMatcherBot:
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("✅ Confirm bid", callback_data=f"confirm:{job.project_id}"),
-                    InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{job.project_id}"),
-                ]
+                    InlineKeyboardButton(
+                        "✍️ Enter bid",
+                        web_app=WebAppInfo(url=self._build_bid_form_url(job)),
+                    )
+                ],
+                [InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{job.project_id}")],
             ]
         )
         await query.edit_message_text(
@@ -182,36 +201,33 @@ class JobMatcherBot:
         self.job_state_store.update_status(query.from_user.id, job_id, "bid_cancelled")
         await query.edit_message_text("Bid cancelled.")
 
-    async def _confirm_bid(self, query, job_id: int) -> None:
+    async def _cancel_bid_draft(self, query, job_id: int) -> None:
+        self.job_state_store.update_status(query.from_user.id, job_id, "bid_draft_cancelled")
+        await query.edit_message_text("Bid draft discarded.")
+
+    async def _submit_bid(self, query, job_id: int) -> None:
         record = self.job_state_store.get_job(query.from_user.id, job_id)
         if not record:
             await query.edit_message_text("Job details missing. Try fetching again.")
             return
+        metadata = self.job_state_store.get_bid_metadata(query.from_user.id, job_id)
+        if not metadata:
+            await query.edit_message_text("No bid draft found. Please enter bid details again.")
+            return
         job = FreelancerJob(**record["payload"])
-        profile = self.profile_store.get_profile(query.from_user.id)
-        if not profile:
-            await query.edit_message_text("Profile missing. Please complete your profile first.")
+        amount = metadata.get("amount")
+        period = metadata.get("period")
+        cover_letter = metadata.get("cover_letter")
+        if amount is None or period is None or not cover_letter:
+            await query.edit_message_text("Incomplete bid information. Please re-submit the bid form.")
             return
 
-        experience_summary = self._build_experience_summary(profile)
-        cover_letter = await asyncio.get_event_loop().run_in_executor(
-            None,
-            generate_cover_letter,
-            job.title,
-            job.full_description or job.preview_description,
-            experience_summary,
-            "You are a professional freelancer writing creative proposals for job applications.",
-            profile.get("sample_link"),
-        )
-
-        bid_amount = self._suggest_bid_amount(job, profile)
-        bid_period = job.duration or 7
         success, message = await asyncio.get_event_loop().run_in_executor(
             None,
             create_bid,
             job.project_id,
-            bid_amount,
-            bid_period,
+            amount,
+            period,
             100,
             cover_letter,
         )
@@ -219,8 +235,8 @@ class JobMatcherBot:
             self.job_state_store.mark_bid_result(query.from_user.id, job.project_id, "bid_confirmed")
             text = (
                 f"✅ Bid submitted for <b>{html.escape(job.title)}</b>\n"
-                f"<b>Amount:</b> {job.currency} {bid_amount}\n"
-                f"<b>Period:</b> {bid_period} days\n\n"
+                f"<b>Amount:</b> {job.currency} {amount}\n"
+                f"<b>Period:</b> {period} days\n\n"
                 f"<b>Proposal:</b>\n{html.escape(cover_letter)}"
             )
         else:
@@ -288,6 +304,85 @@ class JobMatcherBot:
             except ValueError:
                 pass
         return 100.0
+
+    def _build_bid_form_url(self, job: FreelancerJob) -> str:
+        params = urlencode(
+            {
+                "job_id": job.project_id,
+                "title": job.title,
+                "currency": job.currency,
+            }
+        )
+        return f"{self.settings.webapp.bid_form_url}?{params}"
+
+    async def _process_bid_form_submission(self, update: Update, user_id: int, form_data: dict) -> None:
+        job_id = form_data.get("job_id")
+        if not job_id:
+            await update.effective_message.reply_text("Missing job identifier in the bid form.")
+            return
+        try:
+            job_id = int(job_id)
+        except ValueError:
+            await update.effective_message.reply_text("Invalid job identifier received.")
+            return
+        record = self.job_state_store.get_job(user_id, job_id)
+        if not record:
+            await update.effective_message.reply_text("Could not load job details for this bid.")
+            return
+        job = FreelancerJob(**record["payload"])
+        profile = self.profile_store.get_profile(user_id)
+        if not profile:
+            await update.effective_message.reply_text("Profile missing. Please complete your profile first.")
+            return
+
+        try:
+            amount = float(form_data.get("amount"))
+            period = int(form_data.get("period"))
+        except (TypeError, ValueError):
+            await update.effective_message.reply_text("Please provide numeric values for amount and period.")
+            return
+
+        sample_jobs = form_data.get("sample_jobs")
+        experience_summary = self._build_experience_summary(profile)
+        cover_letter = await asyncio.get_event_loop().run_in_executor(
+            None,
+            generate_cover_letter,
+            job.title,
+            job.full_description or job.preview_description,
+            experience_summary,
+            "You are a professional freelancer writing creative proposals for job applications.",
+            sample_jobs or profile.get("sample_link"),
+        )
+
+        metadata = {
+            "amount": amount,
+            "period": period,
+            "sample_jobs": sample_jobs,
+            "cover_letter": cover_letter,
+        }
+        self.job_state_store.save_bid_metadata(user_id, job_id, metadata)
+        self.job_state_store.update_status(user_id, job_id, "bid_draft")
+
+        keyboard = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("✅ Send bid", callback_data=f"sendbid:{job_id}")],
+                [
+                    InlineKeyboardButton(
+                        "✍️ Edit bid",
+                        web_app=WebAppInfo(url=self._build_bid_form_url(job)),
+                    )
+                ],
+                [InlineKeyboardButton("✖️ Cancel", callback_data=f"cancelbid:{job_id}")],
+            ]
+        )
+        text = (
+            f"<b>{html.escape(job.title)}</b>\n"
+            f"<b>Amount:</b> {job.currency} {amount}\n"
+            f"<b>Period:</b> {period} days\n\n"
+            f"<b>Proposal draft:</b>\n{html.escape(cover_letter)}\n\n"
+            "Send this proposal?"
+        )
+        await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
 
 
 def run_bot() -> None:
