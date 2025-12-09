@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html
 import json
+import logging
 from pathlib import Path
 from queue import Empty
 from typing import Optional
@@ -33,6 +34,7 @@ from .job_state_store import JobStateStore
 from .open_ai_api_helper import generate_cover_letter
 from .profile_store import ProfileStore
 
+logger = logging.getLogger(__name__)
 
 class JobMatcherBot:
     def __init__(
@@ -115,6 +117,7 @@ class JobMatcherBot:
         try:
             payload = json.loads(data_raw)
         except json.JSONDecodeError:
+            logger.warning("Failed to decode webapp data for user %s: %s", user_id, data_raw[:200])
             await update.effective_message.reply_text("Unable to parse form submission.")
             return
 
@@ -124,10 +127,12 @@ class JobMatcherBot:
         if form_type == "profile":
             form_data["telegram_user_id"] = user_id
             self.profile_store.upsert_profile(user_id, form_data)
+            logger.info("Profile saved for user %s", user_id)
             await update.effective_message.reply_text("Profile saved successfully ✅")
             return
 
         if form_type == "bid":
+            logger.info("Bid form submission for user %s: job_id=%s", user_id, form_data.get("job_id"))
             await self._process_bid_form_submission(update, user_id, form_data)
             return
 
@@ -212,6 +217,7 @@ class JobMatcherBot:
             return
         metadata = self.job_state_store.get_bid_metadata(query.from_user.id, job_id)
         if not metadata:
+            logger.warning("No bid metadata found for user %s job %s", query.from_user.id, job_id)
             await query.edit_message_text("No bid draft found. Please enter bid details again.")
             return
         job = FreelancerJob(**record["payload"])
@@ -222,6 +228,13 @@ class JobMatcherBot:
             await query.edit_message_text("Incomplete bid information. Please re-submit the bid form.")
             return
 
+        logger.info(
+            "Submitting bid for user %s job %s amount=%s period=%s",
+            query.from_user.id,
+            job.project_id,
+            amount,
+            period,
+        )
         success, message = await asyncio.get_event_loop().run_in_executor(
             None,
             create_bid,
@@ -240,6 +253,12 @@ class JobMatcherBot:
                 f"<b>Proposal:</b>\n{html.escape(cover_letter)}"
             )
         else:
+            logger.error(
+                "Bid submission failed for user %s job %s: %s",
+                query.from_user.id,
+                job.project_id,
+                message,
+            )
             self.job_state_store.mark_bid_result(query.from_user.id, job.project_id, "bid_failed", message)
             text = f"⚠️ Unable to submit bid: {html.escape(message)}"
         await query.edit_message_text(text, parse_mode=ParseMode.HTML)
@@ -323,15 +342,18 @@ class JobMatcherBot:
         try:
             job_id = int(job_id)
         except ValueError:
+            logger.warning("Invalid job id provided in bid form: %s", job_id)
             await update.effective_message.reply_text("Invalid job identifier received.")
             return
         record = self.job_state_store.get_job(user_id, job_id)
         if not record:
+            logger.warning("Job %s not found for user %s during bid submission", job_id, user_id)
             await update.effective_message.reply_text("Could not load job details for this bid.")
             return
         job = FreelancerJob(**record["payload"])
         profile = self.profile_store.get_profile(user_id)
         if not profile:
+            logger.warning("Profile missing for user %s while processing bid form", user_id)
             await update.effective_message.reply_text("Profile missing. Please complete your profile first.")
             return
 
@@ -339,6 +361,7 @@ class JobMatcherBot:
             amount = float(form_data.get("amount"))
             period = int(form_data.get("period"))
         except (TypeError, ValueError):
+            logger.warning("Invalid amount/period in bid form for user %s: %s", user_id, form_data)
             await update.effective_message.reply_text("Please provide numeric values for amount and period.")
             return
 
@@ -362,6 +385,9 @@ class JobMatcherBot:
         }
         self.job_state_store.save_bid_metadata(user_id, job_id, metadata)
         self.job_state_store.update_status(user_id, job_id, "bid_draft")
+        logger.info(
+            "Bid draft stored for user %s job %s amount=%s period=%s", user_id, job_id, amount, period
+        )
 
         keyboard = InlineKeyboardMarkup(
             [
