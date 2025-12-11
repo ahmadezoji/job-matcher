@@ -27,8 +27,9 @@ from telegram.ext import (
     filters,
 )
 
-from .config import Settings, load_settings
 from .freelancer_api_helper import FreelancerJob, create_bid
+
+from .config import Settings, load_settings
 from .job_matcher_service import JobMatcherService
 from .job_state_store import JobStateStore
 from .open_ai_api_helper import generate_cover_letter

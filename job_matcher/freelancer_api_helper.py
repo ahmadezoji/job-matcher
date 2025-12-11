@@ -15,8 +15,12 @@ settings = load_settings()
 API_BASE = settings.freelancer.api_base.rstrip("/")
 
 
-def load_token() -> str:
-    return settings.freelancer.api_token
+# def load_token() -> str:
+#     return settings.freelancer.api_token
+
+def load_token():
+    with open("freelancer_token.txt", "r") as f:
+        return f.read().strip()
 
 
 @dataclass
@@ -99,16 +103,14 @@ class FreelancerJob:
         return "not listed"
 
 
-def get_profile_id(access_token: str) -> Optional[int]:
+
+def get_profile_id(access_token: str):
+    url = "https://www.freelancer.com/api/users/0.1/self/"
     headers = {"freelancer-oauth-v1": access_token}
-    url = f"{API_BASE}/users/0.1/self/"
-    resp = requests.get(url, headers=headers, timeout=30)
-    if resp.status_code != 200:
-        logger.error("Failed to fetch Freelancer profile id: %s %s", resp.status_code, resp.text)
-        return None
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
     data = resp.json()
-    result = data.get("result") or {}
-    return result.get("id")
+    return data["result"]["id"]
 
 
 def search_jobs(
