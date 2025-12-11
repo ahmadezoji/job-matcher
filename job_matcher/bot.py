@@ -197,7 +197,23 @@ class JobMatcherBot:
     async def _cancel_bid(self, query, job_id: int) -> None:
         self.job_state_store.update_status(query.from_user.id, job_id, "bid_cancelled")
         self._pending_bid_urls.pop(query.from_user.id, None)
-        await query.edit_message_text("Bid cancelled.")
+        record = self.job_state_store.get_job(query.from_user.id, job_id)
+        if not record:
+            await query.edit_message_text("Bid cancelled.")
+            return
+        job = FreelancerJob(**record["payload"])
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("💼 Bid this job", callback_data=f"bid:{job.project_id}"),
+                ]
+            ]
+        )
+        await query.edit_message_text(
+            job.summary_html(),
+            parse_mode=ParseMode.HTML,
+            reply_markup=keyboard,
+        )
 
     async def _cancel_bid_draft(self, query, job_id: int) -> None:
         self.job_state_store.update_status(query.from_user.id, job_id, "bid_draft_cancelled")
