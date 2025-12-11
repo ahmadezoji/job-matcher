@@ -180,13 +180,7 @@ class JobMatcherBot:
         self._pending_bid_urls[query.from_user.id] = bid_url
         keyboard = InlineKeyboardMarkup(
             [
-                [
-                    InlineKeyboardButton(
-                        "✍️ Enter bid",
-                        web_app=WebAppInfo(url=bid_url),
-                    )
-                ],
-                [InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{job.project_id}")],
+                [InlineKeyboardButton("✖️ Cancel this job bid", callback_data=f"cancel:{job.project_id}")],
             ]
         )
         await query.edit_message_text(
@@ -202,6 +196,7 @@ class JobMatcherBot:
 
     async def _cancel_bid(self, query, job_id: int) -> None:
         self.job_state_store.update_status(query.from_user.id, job_id, "bid_cancelled")
+        self._pending_bid_urls.pop(query.from_user.id, None)
         await query.edit_message_text("Bid cancelled.")
 
     async def _cancel_bid_draft(self, query, job_id: int) -> None:
