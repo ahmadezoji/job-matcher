@@ -30,6 +30,8 @@ def generate_cover_letter(
         user_content = (
             "Write a concise, human-sounding cover letter for a freelancer. "
             "Keep it warm but professional, as if written by the freelancer directly. "
+            "Skip greetings or sign-offs unless specific names are provided (none are). "
+            "Do not invent client or freelancer names—begin with the core content. "
             "Structure it into two short paragraphs: "
             "1) highlight the most relevant past experience and tools; "
             "2) explain how those skills solve the client's needs and why the client should pick this freelancer. "
