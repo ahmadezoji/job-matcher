@@ -49,6 +49,7 @@ class JobMatcherBot:
         self.job_state_store = job_state_store
         self.matcher_service = matcher_service
         self.application = Application.builder().token(settings.telegram.bot_token).build()
+        self._pending_bid_urls: dict[int, str] = {}
 
     def setup_handlers(self) -> None:
         self.application.add_handler(CommandHandler("start", self.start_command))
@@ -79,17 +80,7 @@ class JobMatcherBot:
                 InlineKeyboardButton("View profile", callback_data="action:view"),
             ],
         ]
-        reply_keyboard = ReplyKeyboardMarkup(
-            [
-                [
-                    KeyboardButton(
-                        text="Create Profile" if not has_profile else "Edit Profile",
-                        web_app=WebAppInfo(url=self.settings.webapp.profile_form_url),
-                    )
-                ]
-            ],
-            resize_keyboard=True,
-        )
+        reply_keyboard = self._build_reply_keyboard(user_id, has_profile)
         greeting = (
             "Welcome to Job Matcher!\n"
             "• Use the button below to open the mini app and edit your profile.\n"
@@ -185,12 +176,14 @@ class JobMatcherBot:
             return
         job = FreelancerJob(**record["payload"])
         self.job_state_store.update_status(query.from_user.id, job_id, "bid_requested")
+        bid_url = self._build_bid_form_url(job)
+        self._pending_bid_urls[query.from_user.id] = bid_url
         keyboard = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
                         "✍️ Enter bid",
-                        web_app=WebAppInfo(url=self._build_bid_form_url(job)),
+                        web_app=WebAppInfo(url=bid_url),
                     )
                 ],
                 [InlineKeyboardButton("✖️ Cancel", callback_data=f"cancel:{job.project_id}")],
@@ -200,6 +193,11 @@ class JobMatcherBot:
             job.details_html(),
             parse_mode=ParseMode.HTML,
             reply_markup=keyboard,
+        )
+        has_profile = self.profile_store.get_profile(query.from_user.id) is not None
+        await query.message.reply_text(
+            "Pressed the Apply Job button in the menu to reopen the bid form.",
+            reply_markup=self._build_reply_keyboard(query.from_user.id, has_profile),
         )
 
     async def _cancel_bid(self, query, job_id: int) -> None:
@@ -333,6 +331,22 @@ class JobMatcherBot:
             }
         )
         return f"{self.settings.webapp.bid_form_url}?{params}"
+
+    def _default_bid_form_url(self) -> str:
+        return f"{self.settings.webapp.bid_form_url}?job_id=0&title=Select%20a%20job&currency=USD"
+
+    def _build_reply_keyboard(self, user_id: int, has_profile: bool) -> ReplyKeyboardMarkup:
+        profile_button = KeyboardButton(
+            text="Create Profile" if not has_profile else "Edit Profile",
+            web_app=WebAppInfo(url=self.settings.webapp.profile_form_url),
+        )
+        bid_url = self._pending_bid_urls.get(user_id, self._default_bid_form_url())
+        apply_label = "Apply Job" if user_id in self._pending_bid_urls else "Apply Job (select job first)"
+        apply_button = KeyboardButton(
+            text=apply_label,
+            web_app=WebAppInfo(url=bid_url),
+        )
+        return ReplyKeyboardMarkup([[profile_button], [apply_button]], resize_keyboard=True)
 
     async def _process_bid_form_submission(self, update: Update, user_id: int, form_data: dict) -> None:
         job_id = form_data.get("job_id")

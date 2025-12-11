@@ -81,6 +81,7 @@ class FreelancerJob:
     def details_html(self) -> str:
         return (
             f"<b>{html.escape(self.title)}</b>\n"
+            f"<b>Job ID:</b> <code>{self.project_id}</code>\n"
             f"{html.escape(self.full_description or self.preview_description)}\n\n"
             f"<b>Budget:</b> {self._format_price()}\n"
             f"<b>Job type:</b> {html.escape(self.job_type.title())}\n"
