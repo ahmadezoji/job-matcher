@@ -42,7 +42,7 @@ class FreelancerJob:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FreelancerJob":
         budget = data.get("budget") or {}
-        currency = budget.get("currency") or {}
+        currency = data.get("currency") or {}
         jobs = data.get("jobs") or []
         upgrades = data.get("upgrades") or {}
         return cls(
