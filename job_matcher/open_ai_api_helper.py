@@ -19,6 +19,7 @@ def generate_cover_letter(
     experience_summary: str,
     context: str = "You are a professional freelancer writing creative proposals for job applications.",
     sample_link: Optional[str] = None,
+    user_notes: Optional[str] = None,
 ) -> str:
     if not OPENAI_API_KEY:
         logger.error("OpenAI API key missing")
@@ -28,21 +29,30 @@ def generate_cover_letter(
         )
     try:
         user_content = (
-            "Write a concise, human-sounding cover letter for a freelancer. "
-            "Keep it warm but professional, as if written by the freelancer directly. "
-            "Skip greetings or sign-offs unless specific names are provided (none are). "
-            "Do not invent client or freelancer names—begin with the core content. "
-            "Structure it into two short paragraphs: "
-            "1) highlight the most relevant past experience and tools; "
-            "2) explain how those skills solve the client's needs and why the client should pick this freelancer. "
-            "Avoid filler, personal contact info, or repetition.\n"
-            f"Project Title: {project_title}\n"
-            f"Project Description: {project_description}\n"
-            f"My Relevant Experience: {experience_summary or 'Use the context above.'}\n"
-            "End with a confident sentence about readiness to start."
+            "Write a genuine, conversational cover letter for a freelancer applying to a project. "
+            "The tone should feel like a real person wrote it—natural, confident, and personable. "
+            "Avoid corporate jargon, generic phrases like 'I am excited to apply', or overly formal language. "
+            "Write as if you're having a direct conversation with the client.\n\n"
+            "IMPORTANT GUIDELINES:\n"
+            "- Start by showing you actually read and understood their project (reference specific details)\n"
+            "- Share a brief, relevant story or example from past work that connects to their needs\n"
+            "- Be specific about HOW you would approach their project, not just THAT you can do it\n"
+            "- Show genuine curiosity or insight about their project\n"
+            "- Keep it concise (2-3 short paragraphs max)\n"
+            "- No greetings like 'Dear Sir/Madam' or sign-offs like 'Best regards'\n"
+            "- Don't invent names or details not provided\n"
+            "- End with a natural call-to-action, like asking a clarifying question or suggesting next steps\n\n"
+            f"PROJECT TITLE: {project_title}\n"
+            f"PROJECT DESCRIPTION: {project_description}\n"
+            f"MY RELEVANT EXPERIENCE: {experience_summary or 'General freelancing experience.'}\n"
         )
-        if experience_summary:
-            user_content += f"My Relevant Experience: {experience_summary}\n"
+
+        if user_notes and user_notes.strip():
+            user_content += (
+                f"\nSPECIAL INSTRUCTIONS FROM ME (incorporate these naturally into the letter):\n"
+                f"{user_notes}\n"
+            )
+
         valid_sample_link = (
             sample_link
             and isinstance(sample_link, str)
@@ -50,8 +60,9 @@ def generate_cover_letter(
             and sample_link.strip() not in ["", " ", "-", "_", ".", ",", "x", "X"]
         )
         if valid_sample_link:
-            user_content += f"Here is a sample project I have worked on: {sample_link}\n"
-        user_content += "Keep it concise, professional, and solution-oriented."
+            user_content += f"\nSAMPLE PROJECT LINK (mention naturally if relevant): {sample_link}\n"
+
+        user_content += "\nRemember: Sound like a real human, not a template. Be specific and genuine."
 
         payload = {
             "model": "gpt-4o-mini",
@@ -59,7 +70,7 @@ def generate_cover_letter(
                 {"role": "system", "content": context},
                 {"role": "user", "content": user_content},
             ],
-            "max_tokens": 200,
+            "max_tokens": 300,
             "temperature": 0.7,
         }
         headers = {

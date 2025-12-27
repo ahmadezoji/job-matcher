@@ -392,15 +392,18 @@ class JobMatcherBot:
             return
 
         sample_jobs = form_data.get("sample_jobs")
+        user_notes = form_data.get("user_notes")
         experience_summary = self._build_experience_summary(profile)
         cover_letter = await asyncio.get_event_loop().run_in_executor(
             None,
-            generate_cover_letter,
-            job.title,
-            job.full_description or job.preview_description,
-            experience_summary,
-            "You are a professional freelancer writing creative proposals for job applications.",
-            sample_jobs or profile.get("sample_link"),
+            lambda: generate_cover_letter(
+                project_title=job.title,
+                project_description=job.full_description or job.preview_description,
+                experience_summary=experience_summary,
+                context="You are a professional freelancer writing creative proposals for job applications.",
+                sample_link=sample_jobs or profile.get("sample_link"),
+                user_notes=user_notes,
+            ),
         )
 
         metadata = {

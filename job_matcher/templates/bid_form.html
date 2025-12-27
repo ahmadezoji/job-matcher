@@ -88,6 +88,13 @@
             placeholder="Link or short description of similar work"
           ></textarea>
 
+          <label for="user_notes">Your approach / special notes (optional)</label>
+          <textarea
+            id="user_notes"
+            name="user_notes"
+            placeholder="E.g., 'Mention I can start immediately' or 'Emphasize my experience with React' or 'Suggest a quick call to discuss details'"
+          ></textarea>
+
           <button type="submit">Generate proposal</button>
         </form>
       </div>
@@ -117,6 +124,7 @@
             amount: document.getElementById("amount").value,
             period: document.getElementById("period").value,
             sample_jobs: document.getElementById("sample_jobs").value,
+            user_notes: document.getElementById("user_notes").value,
             currency,
           },
         };
